@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 # Importing all required libraries
 
-#df = pd.read_csv("Stahl_N_20MnB4.csv", sep=';', encoding='latin1')
-df = pd.read_csv("aluminium_data", sep=';', encoding='latin1')
+df = pd.read_csv("Stahl_N_20MnB4.csv", sep=';', encoding='latin1')
+#df = pd.read_csv("aluminium_data.csv", sep=';', encoding='latin1')
 
 # using pandas reading the CSV file with tensile test data
 
@@ -40,7 +40,7 @@ def elastic(strain_e, E):
 
 def swift():
     pass'''
-
+print('stress before cleaning is',df['Stress_MPa'])
 
 for col in ['Strain_%', 'Stress_MPa', 'Wahre Spannung_N/mm²']:
     if col in df.columns:
@@ -53,20 +53,23 @@ for col in ['Strain_%', 'Stress_MPa', 'Wahre Spannung_N/mm²']:
 required = [c for c in ['Strain_%', 'Stress_MPa'] if c in df.columns]
 df = df.dropna(subset=required).copy()
 
+print('stress after cleaning is',df['Stress_MPa'])
 
 eps_eng = df['Strain_%'].to_numpy() / 100.0          # engineering strain (fraction)
 sig_eng = df['Stress_MPa'].to_numpy()                # engineering stress (MPa)
 #creating numpy arrays
 
+ut_stress = df['Stress_MPa'].max()
+uts_idx = df['Stress_MPa'].idxmax()
+print('UTS is',ut_stress)
 
 # Prefer true stress if available
-if 'Wahre Spannung_N/mm²' in df.columns:
-    sig_true = df['Wahre Spannung_N/mm²'].to_numpy()
-else:
-    sig_true = sig_eng * (1.0 + eps_eng)
+sig_true = sig_eng * (1.0 + eps_eng)
+print('sig_true is',sig_true)
+
 
 # True strain from engineering
-eps_true = np.log1p(eps_eng)
+eps_true = np.log(1+eps_eng)
 
 
 mask_E = (eps_eng >= 0.0001) & (eps_eng <= 0.0025)
@@ -89,10 +92,14 @@ print(f"Yield approx: idx={yield_idx}, sigma_y={sigma_y:.1f} MPa")
 
 #εp ≈ εtrue − σtrue/E beyond yield
 ep_all = eps_true - sig_true / E_hat
-mask_plastic = np.arange(len(ep_all)) >= yield_idx
+mask_plastic = (np.arange(len(ep_all)) >= yield_idx) & (np.arange(len(ep_all)) <= uts_idx)
+#mask_plastic_stress = (np.arange(len(sig_true)) >= yield_idx) & (np.arange(len(sig_true)) <= uts_idx)
 ep_fit = ep_all[mask_plastic]
 sig_fit = sig_true[mask_plastic]
 #to use plastic strains after the yielding
+print('plastic strain values:', ep_fit)
+print('stress near plastic strain values:', sig_fit)
+print("length of plastic strain and stress:", len(ep_fit) ,',' ,len(sig_fit))
 
 valid = ep_fit > 0
 ep_fit = ep_fit[valid]
@@ -104,10 +111,10 @@ def ludwig(ep, sigma0, K, n):
 def swift():
     pass
 
-#Fitting into Ludwik curve
-sigma0_g = max(sigma_y, np.nanpercentile(sig_fit, 5))
-n_g = float(np.clip(0.2, 0.01, 1.0))
-K_g = (np.nanmax(sig_fit) - sigma0_g) / max(ep_fit.max()**n_g, 1e-6)
+#Fitting into Ludwig curve with initial guesses
+sigma0_g = sigma_y
+n_g = float(np.clip(0.1, 0.001, 3.0))
+K_g = (np.max(sig_fit) - sigma0_g) / max(ep_fit.max()**n_g, 1e-6)
 
 p0_lud = [sigma0_g, K_g, n_g]
 lb_lud = np.array([0.0, 0.0, 0.01], dtype=float)
@@ -122,22 +129,23 @@ p0_lud = np.minimum(p0_lud, ub_lud - eps_b)
 # Fallback if non-finite
 if not np.all(np.isfinite(p0_lud)):
     p0_lud = np.array([
-        max(sigma_y, np.nanmin(sig_fit)),
-        max(np.nanmedian(sig_fit), 1.0),
+        max(sigma_y, np.min(sig_fit)),
+        max(np.median(sig_fit), 1.0),
         0.2
     ], dtype=float)
     p0_lud = np.maximum(p0_lud, lb_lud + eps_b)
     p0_lud = np.minimum(p0_lud, ub_lud - eps_b)
 
-pars_lud, cov_lud = curve_fit(ludwig, ep_fit, sig_fit,p0=p0_lud)
+pars_lud, cov_lud = curve_fit(ludwig, ep_fit, sig_fit, p0=p0_lud)
 
 
 sigma0_hat, K_hat, n_hat = [float(x) for x in pars_lud]
-print({'E': E_hat, 'sigma0 (MPa)': sigma0_hat, 'K': K_hat, 'n (-)': n_hat})
+print({'E': E_hat, 'sigma0 (MPa)': sigma0_hat, 'K': K_hat, 'n': n_hat})
 
 
 
 fig, ax = plt.subplots(figsize=(9,6))
+#
 ax.plot(df['Strain_%'], df['Stress_MPa'], 'c.', ms=1, alpha=0.3, label='Engineering (for reference)')
 ax.plot(eps_true, sig_true, 'k.', ms=2, alpha=0.5, label='True stress–strain')
 ax.plot(ep_fit, ludwig(ep_fit, *pars_lud), 'r-', lw=2, label=f'Ludwik fit (σ0={sigma0_hat:.1f}, K={K_hat:.1f}, n={n_hat:.3f})')
@@ -147,7 +155,7 @@ ax.legend()
 ax.grid(True, alpha=0.3)
 
 # Sparse ticks: min, mids, max for x using ep_fit; y using sig_fit
-def sparse_ticks(a, n_middle=10):
+def sparse_ticks(a, n_middle=5):
     amin, amax = np.nanmin(a), np.nanmax(a)
     if amin == amax:
         return [amin]
