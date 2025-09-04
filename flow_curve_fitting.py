@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 # Importing all required libraries
 
-df = pd.read_csv("C:/Users/satwi/Desktop/Imprinttec/Stahl_N_20MnB4.csv", sep=';', encoding='latin1')
+#df = pd.read_csv("Stahl_N_20MnB4.csv", sep=';', encoding='latin1')
+df = pd.read_csv("aluminium_data", sep=';', encoding='latin1')
+
 # using pandas reading the CSV file with tensile test data
 
 print("A short description of the data: ", df.describe())
