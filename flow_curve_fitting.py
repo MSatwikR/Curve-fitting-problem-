@@ -102,7 +102,7 @@ def ludwig(ep, sigma0, K, n):
 def swift():
     pass
 
-# -------------------- Fit Ludwik --------------------
+#Fitting into Ludwik curve
 sigma0_g = max(sigma_y, np.nanpercentile(sig_fit, 5))
 n_g = float(np.clip(0.2, 0.01, 1.0))
 K_g = (np.nanmax(sig_fit) - sigma0_g) / max(ep_fit.max()**n_g, 1e-6)
