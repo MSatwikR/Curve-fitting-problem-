@@ -63,7 +63,7 @@ ut_stress = df['Stress_MPa'].max()
 uts_idx = df['Stress_MPa'].idxmax()
 print('UTS is',ut_stress)
 
-# Prefer true stress if available
+#true stress calculation
 sig_true = sig_eng * (1.0 + eps_eng)
 print('sig_true is',sig_true)
 
@@ -92,7 +92,7 @@ print(f"Yield approx: idx={yield_idx}, sigma_y={sigma_y:.1f} MPa")
 
 #εp ≈ εtrue − σtrue/E beyond yield
 ep_all = eps_true - sig_true / E_hat
-mask_plastic = (np.arange(len(ep_all)) >= yield_idx) & (np.arange(len(ep_all)) <= uts_idx)
+mask_plastic = (np.arange(len(ep_all)) >= yield_idx+150) & (np.arange(len(ep_all)) <= uts_idx+50)
 #mask_plastic_stress = (np.arange(len(sig_true)) >= yield_idx) & (np.arange(len(sig_true)) <= uts_idx)
 ep_fit = ep_all[mask_plastic]
 sig_fit = sig_true[mask_plastic]
@@ -107,9 +107,16 @@ sig_fit = sig_fit[valid]
 
 def ludwig(ep, sigma0, K, n):
     return sigma0 + K * (ep ** n)
+# k = strength coefficient, n = hardening exponent, sigma0 = yield stress
 
-def swift():
-    pass
+def swift(ep, ep0, A, n):
+    return A * (ep + ep0)**n
+# A = strength coefficient, n = hardening exponent, ep0 = yield strain
+
+
+def voce(ep, sigma0, Q, B):
+    return sigma0 + (Q * (1-np.exp(-B*ep)))
+# Q = saturation stress increment, B = strain rate coefficient, n = hardening exponent, sigma0 = yield stress
 
 #Fitting into Ludwig curve with initial guesses
 sigma0_g = sigma_y
@@ -146,9 +153,9 @@ print({'E': E_hat, 'sigma0 (MPa)': sigma0_hat, 'K': K_hat, 'n': n_hat})
 
 fig, ax = plt.subplots(figsize=(9,6))
 #
-ax.plot(df['Strain_%'], df['Stress_MPa'], 'c.', ms=1, alpha=0.3, label='Engineering (for reference)')
+ax.plot(eps_eng, sig_eng, 'c.', ms=1, alpha=0.3, label='Engineering (for reference)')
 ax.plot(eps_true, sig_true, 'k.', ms=2, alpha=0.5, label='True stress–strain')
-ax.plot(ep_fit, ludwig(ep_fit, *pars_lud), 'r-', lw=2, label=f'Ludwik fit (σ0={sigma0_hat:.1f}, K={K_hat:.1f}, n={n_hat:.3f})')
+ax.plot(ep_fit, ludwig(ep_fit, *pars_lud), 'r.',ms=2, alpha=0.5, label=f'Ludwig fit (σ0={sigma0_hat:.1f}, K={K_hat:.1f}, n={n_hat:.3f})')
 ax.set_xlabel('Strain')
 ax.set_ylabel('Stress (MPa)')
 ax.legend()
