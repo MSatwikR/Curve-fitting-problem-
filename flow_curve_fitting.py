@@ -192,6 +192,10 @@ ax.set_yticks(sparse_ticks(sig_fit))
 plt.tight_layout()
 plt.show()
 
+
+print('Fit quality of ludwig is:',cov_lud[0, 0])
+
+
 # Extrapolating the fitted curves to a wider strain range
 
 # Choosing the extrapolation range (plastic strain)
