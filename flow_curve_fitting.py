@@ -124,7 +124,7 @@ n_g = float(np.clip(0.1, 0.001, 3.0))
 K_g = (np.max(sig_fit) - sigma0_g) / max(ep_fit.max()**n_g, 1e-6)
 
 p0_lud = [sigma0_g, K_g, n_g]
-lb_lud = np.array([0.0, 0.0, 0.01], dtype=float)
+'''lb_lud = np.array([0.0, 0.0, 0.01], dtype=float)
 ub_lud = np.array([np.inf, np.inf, 1.0], dtype=float)
 
 # Clip p0 into (bounds) with small epsilon margin
@@ -141,9 +141,25 @@ if not np.all(np.isfinite(p0_lud)):
         0.2
     ], dtype=float)
     p0_lud = np.maximum(p0_lud, lb_lud + eps_b)
-    p0_lud = np.minimum(p0_lud, ub_lud - eps_b)
+    p0_lud = np.minimum(p0_lud, ub_lud - eps_b)'''
+
+#Fitting into the swift law
+ep0_g = float(sigma_y/E_hat)
+t_g = float(np.clip(0.1, 0.001, 3.0))
+A_g = (np.max(sig_fit) - sigma0_g) / max(ep_fit.max()**n_g, 1e-6)
+p0_swift = [ep0_g, A_g, t_g]
+
+
+#Fitting into the voce law
+sigma0v_g = sigma_y
+B_g = 20#(np.max(sig_fit) - sigma0_g) / max(ep_fit.max()**n_g, 1e-6)
+Q_g = 600#(np.max(sig_fit) - sigma0_g) / max(ep_fit.max()**n_g, 1e-6)
+p0_voce = [sigma0v_g, Q_g, B_g]
+
 
 pars_lud, cov_lud = curve_fit(ludwig, ep_fit, sig_fit, p0=p0_lud)
+pars_swift, cov_swift = curve_fit(swift, ep_fit, sig_fit, p0=p0_swift)
+pars_voce, cov_voce = curve_fit(voce, ep_fit, sig_fit, p0=p0_voce)
 
 
 sigma0_hat, K_hat, n_hat = [float(x) for x in pars_lud]
@@ -156,6 +172,8 @@ fig, ax = plt.subplots(figsize=(9,6))
 ax.plot(eps_eng, sig_eng, 'c.', ms=1, alpha=0.3, label='Engineering (for reference)')
 ax.plot(eps_true, sig_true, 'k.', ms=2, alpha=0.5, label='True stress–strain')
 ax.plot(ep_fit, ludwig(ep_fit, *pars_lud), 'r.',ms=2, alpha=0.5, label=f'Ludwig fit (σ0={sigma0_hat:.1f}, K={K_hat:.1f}, n={n_hat:.3f})')
+ax.plot(ep_fit, swift(ep_fit, *pars_swift),'g.',ms =2, alpha= 0.5, label=f'Swift fit (ep0 = {(sigma0_hat/E_hat):.1f}, A = {K_hat:.1f}, n= {n_hat:.4f})')
+ax.plot(ep_fit, voce(ep_fit, *pars_voce),'b.',ms =2, alpha= 0.5, label=f'Voce fit ')
 ax.set_xlabel('Strain')
 ax.set_ylabel('Stress (MPa)')
 ax.legend()
@@ -173,3 +191,37 @@ ax.set_xticks(sparse_ticks(ep_fit))
 ax.set_yticks(sparse_ticks(sig_fit))
 plt.tight_layout()
 plt.show()
+
+# Extrapolating the fitted curves to a wider strain range
+
+# Choosing the extrapolation range (plastic strain)
+ep_max_current = float(np.max(ep_fit))
+ep_max_target = max(3*ep_max_current, 0.30)   # extend to 300% of current, at least to 0.30 plastic strain
+N_points = 500
+ep_ex = np.linspace(np.min(ep_fit), ep_max_target, N_points)
+
+# Evaluating models on the extrapolated grid
+sig_lud_ex = ludwig(ep_ex, *pars_lud)
+sig_swift_ex = swift(ep_ex, *pars_swift)
+sig_voce_ex = voce(ep_ex,  *pars_voce)
+
+
+ex_df = pd.DataFrame({
+    'ep_plastic': ep_ex,
+    'sigma_Ludwik_MPa': sig_lud_ex,
+    'sigma_Swift_MPa':  sig_swift_ex,
+    'sigma_Voce_MPa':   sig_voce_ex,
+})
+ex_df.to_csv('extrapolated_flow_curves.csv', index=False)
+print(ex_df.head())
+
+
+fig, ax = plt.subplots(figsize=(8,5))
+ax.plot(eps_true, sig_true, 'k.', ms=2, alpha=0.5, label='True stress–strain')
+ax.plot(ep_ex, sig_lud_ex, 'r.', ms=2, alpha=0.5, label='Ludwik extrapolated')
+ax.plot(ep_ex, sig_swift_ex, 'g.', ms=2, alpha=0.5, label='Swift extrapolated')
+ax.plot(ep_ex, sig_voce_ex, 'b.', ms=2, alpha=0.5, label='Voce extrapolated')
+ax.set_xlabel('True plastic strain')
+ax.set_ylabel('True stress')
+ax.legend(); ax.grid(True, alpha=0.3)
+plt.tight_layout(); plt.show()
