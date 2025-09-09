@@ -5,8 +5,8 @@ from scipy.optimize import curve_fit
 from sklearn.metrics import r2_score
 # Importing all required libraries
 
-df = pd.read_csv("Stahl_N_20MnB4.csv", sep=';', encoding='latin1')
-#df = pd.read_csv("aluminium_data.csv", sep=';', encoding='latin1')
+#df = pd.read_csv("Stahl_N_20MnB4.csv", sep=';', encoding='latin1')
+df = pd.read_csv("aluminium_data.csv", sep=';', encoding='latin1')
 
 # using pandas reading the CSV file with tensile test data
 
@@ -42,11 +42,12 @@ def elastic(strain_e, E):
 def swift():
     pass'''
 print('stress before cleaning is',df['Stress_MPa'])
+print('strain before cleaning is',df['Strain_%'])
 
-for col in ['Strain_%', 'Stress_MPa', 'Wahre Spannung_N/mm²']:
+for col in ['Strain_%', 'Stress_MPa']:
     if col in df.columns:
         s = df[col].astype(str).str.strip()
-        s = s.replace(',', '.', regex=False)     # decimal comma to dot
+        s = s.str.replace(',', '.', regex=False)     # decimal comma to dot
         df[col] = pd.to_numeric(s, errors='coerce')
 #Cleaning numeric columns for swapping dot and column
 
@@ -55,14 +56,27 @@ required = [c for c in ['Strain_%', 'Stress_MPa'] if c in df.columns]
 df = df.dropna(subset=required).copy()
 
 print('stress after cleaning is',df['Stress_MPa'])
+print('strain after cleaning is',df['Strain_%'])
 
 eps_eng = df['Strain_%'].to_numpy() / 100.0          # engineering strain (fraction)
 sig_eng = df['Stress_MPa'].to_numpy()                # engineering stress (MPa)
 #creating numpy arrays
+#eps_eng = eps_eng.tolist()
+#sig_eng = sig_eng.tolist()
 
-ut_stress = df['Stress_MPa'].max()
-uts_idx = df['Stress_MPa'].idxmax()
+valid2 = eps_eng > 0
+eps_eng = eps_eng[valid2]
+sig_eng = sig_eng[valid2]
+
+ut_stress = np.nanmax(sig_eng)
+uts_idx = np.argmax(sig_eng)
 print('UTS is',ut_stress)
+print('UTS index is',uts_idx)
+#print('UTS index difference from df is ',df['Stress_MPa'].idxmax())
+
+
+
+
 
 #true stress calculation
 sig_true = sig_eng * (1.0 + eps_eng)
@@ -72,28 +86,28 @@ print('sig_true is',sig_true)
 # True strain from engineering
 eps_true = np.log(1+eps_eng)
 
+'''valid2 = eps_eng >= 0
+eps_true = eps_true[valid2]
+sig_true = sig_true[valid2]'''
 
-mask_E = (eps_eng >= 0.0001) & (eps_eng <= 0.0025)
-if mask_E.sum() < 5:
-    N = min(50, len(eps_eng))
-    mask_E = np.zeros_like(eps_eng, dtype=bool)
-    mask_E[:N] = True
-coef = np.polyfit(eps_eng[mask_E], sig_eng[mask_E], 1)  # [slope, intercept]
-E_hat = float(coef[0])  # slope = Young's modulus
-print(f"Estimated E (MPa): {E_hat:.1f}")
 #Finding E using the slope of the curve
 
-
-sigma_offset = E_hat * (eps_eng - 0.002)
-yield_idx = int(np.argmin(np.abs(sig_eng - sigma_offset)))
-sigma_y = float(sig_eng[yield_idx])
+sigma_y = 338
+#sigma_offset = (sigma_y - 150)
+yield_idx = int(np.argmin(np.abs(sig_eng - sigma_y)))
 print(f"Yield approx: idx={yield_idx}, sigma_y={sigma_y:.1f} MPa")
 #using E and eps_eng trying to find yield stress
 
+#mask_E = np.arange(len(eps_eng)) < yield_idx
+#coef = np.polyfit(eps_eng[mask_E], sig_eng[mask_E], 1)  # [slope, intercept]
+E_hat = 69500  # slope = Young's modulus
+#print(f"Estimated E (MPa): {E_hat:.1f}")
 
-#εp ≈ εtrue − σtrue/E beyond yield
+
+#plastic strain
 ep_all = eps_true - sig_true / E_hat
-mask_plastic = (np.arange(len(ep_all)) >= yield_idx+150) & (np.arange(len(ep_all)) <= uts_idx+50)
+print('ep_all is',ep_all)
+mask_plastic = (ep_all > 0) & (np.arange(len(ep_all)) <= uts_idx)
 #mask_plastic_stress = (np.arange(len(sig_true)) >= yield_idx) & (np.arange(len(sig_true)) <= uts_idx)
 ep_fit = ep_all[mask_plastic]
 sig_fit = sig_true[mask_plastic]
@@ -102,9 +116,8 @@ print('plastic strain values:', ep_fit)
 print('stress near plastic strain values:', sig_fit)
 print("length of plastic strain and stress:", len(ep_fit) ,',' ,len(sig_fit))
 
-valid = ep_fit > 0
-ep_fit = ep_fit[valid]
-sig_fit = sig_fit[valid]
+
+
 
 def ludwig(ep, sigma0, K, n):
     return sigma0 + K * (ep ** n)
@@ -173,7 +186,7 @@ fig, ax = plt.subplots(figsize=(9,6))
 ax.plot(eps_eng, sig_eng, 'c.', ms=1, alpha=0.3, label='Engineering (for reference)')
 ax.plot(eps_true, sig_true, 'k.', ms=2, alpha=0.5, label='True stress–strain')
 ax.plot(ep_fit, ludwig(ep_fit, *pars_lud), 'r.',ms=2, alpha=0.5, label=f'Ludwig fit (σ0={sigma0_hat:.1f}, K={K_hat:.1f}, n={n_hat:.3f})')
-ax.plot(ep_fit, swift(ep_fit, *pars_swift),'g.',ms =2, alpha= 0.5, label=f'Swift fit (ep0 = {(sigma0_hat/E_hat):.1f}, A = {K_hat:.1f}, n= {n_hat:.4f})')
+ax.plot(ep_fit, swift(ep_fit, *pars_swift),'g.',ms =2, alpha= 0.5, label=f'Swift fit (ep0 = {(sigma0_hat/E_hat):.3f}, A = {K_hat:.1f}, n= {n_hat:.4f})')
 ax.plot(ep_fit, voce(ep_fit, *pars_voce),'b.',ms =2, alpha= 0.5, label=f'Voce fit ')
 ax.set_xlabel('Strain')
 ax.set_ylabel('Stress (MPa)')
@@ -194,8 +207,14 @@ plt.tight_layout()
 plt.show()
 
 
-print('Fit quality of ludwig is:',cov_lud[0, 0])
+r2_lud = r2_score(sig_true[mask_plastic], ludwig(ep_fit, *pars_lud))
+print('R2 score for ludwig fit is',r2_lud)
 
+r2_swift = r2_score(sig_true[mask_plastic], swift(ep_fit, *pars_swift))
+print('R2 score for swift fit is',r2_swift)
+
+r2_voce = r2_score(sig_true[mask_plastic], voce(ep_fit, *pars_voce))
+print('R2 score for voce fit is',r2_voce)
 
 # Extrapolating the fitted curves to a wider strain range
 
@@ -230,12 +249,3 @@ ax.set_xlabel('True plastic strain')
 ax.set_ylabel('True stress')
 ax.legend(); ax.grid(True, alpha=0.3)
 plt.tight_layout(); plt.show()
-
-r2_lud = r2_score(sig_true[mask_plastic], ludwig(ep_fit, *pars_lud))
-print('R2 score for ludwig fit is',r2_lud)
-
-r2_swift = r2_score(sig_true[mask_plastic], swift(ep_fit, *pars_swift))
-print('R2 score for swift fit is',r2_swift)
-
-r2_voce = r2_score(sig_true[mask_plastic], voce(ep_fit, *pars_voce))
-print('R2 score for voce fit is',r2_voce)
