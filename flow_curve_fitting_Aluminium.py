@@ -236,7 +236,7 @@ ex_df = pd.DataFrame({
     'sigma_Swift_MPa':  sig_swift_ex,
     'sigma_Voce_MPa':   sig_voce_ex,
 })
-ex_df.to_csv('extrapolated_flow_curves.csv', index=False)
+ex_df.to_csv('extrapolated_flow_curves_aluminium.csv', index=False)
 print(ex_df.head())
 
 

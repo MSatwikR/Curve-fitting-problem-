@@ -121,10 +121,11 @@ def voce(ep, sigma0, Q, B):
 
 #Fitting into Ludwig curve with initial guesses
 sigma0_g = sigma_y
-n_g = float(np.clip(0.1, 0.001, 3.0))
-K_g = (np.max(sig_fit) - sigma0_g) / max(ep_fit.max()**n_g, 1e-6)
-
+n_g = 0.1
+K_g =600
 p0_lud = [sigma0_g, K_g, n_g]
+bounds_lud = ([200,500,0.001],[1500,1500,0.5])
+
 '''lb_lud = np.array([0.0, 0.0, 0.01], dtype=float)
 ub_lud = np.array([np.inf, np.inf, 1.0], dtype=float)
 
@@ -146,26 +147,33 @@ if not np.all(np.isfinite(p0_lud)):
 
 #Fitting into the swift law
 ep0_g = float(sigma_y/E_hat)
-t_g = float(np.clip(0.1, 0.001, 3.0))
-A_g = (np.max(sig_fit) - sigma0_g) / max(ep_fit.max()**n_g, 1e-6)
+t_g = 0.1
+A_g = 600
 p0_swift = [ep0_g, A_g, t_g]
+bounds_swift = ([0.001, 100, 0.001], [0.05, 1500, 0.5])
 
 
 #Fitting into the voce law
-sigma0v_g = sigma_y
-B_g = 20#(np.max(sig_fit) - sigma0_g) / max(ep_fit.max()**n_g, 1e-6)
-Q_g = 600#(np.max(sig_fit) - sigma0_g) / max(ep_fit.max()**n_g, 1e-6)
+sigma0v_g = float(np.clip(sigma_y, 200, 1500))
+B_g = float(np.clip(10, 1, 30))
+Q_g = float(np.clip(600, 100, 1500))
 p0_voce = [sigma0v_g, Q_g, B_g]
+bounds_voce = ([200, 100, 1], [1500, 1500, 30])  # lower and upper bounds
 
 
-pars_lud, cov_lud = curve_fit(ludwig, ep_fit, sig_fit, p0=p0_lud)
-pars_swift, cov_swift = curve_fit(swift, ep_fit, sig_fit, p0=p0_swift)
-pars_voce, cov_voce = curve_fit(voce, ep_fit, sig_fit, p0=p0_voce)
+pars_lud, cov_lud = curve_fit(ludwig, ep_fit, sig_fit, p0=p0_lud, bounds = bounds_lud)
+pars_swift, cov_swift = curve_fit(swift, ep_fit, sig_fit, p0=p0_swift, bounds = bounds_swift)
+pars_voce, cov_voce = curve_fit(voce, ep_fit, sig_fit, p0=p0_voce, bounds=bounds_voce)
 
 
 sigma0_hat, K_hat, n_hat = [float(x) for x in pars_lud]
 print({'E': E_hat, 'sigma0 (MPa)': sigma0_hat, 'K': K_hat, 'n': n_hat})
 
+e0_hat, K_hat, n_hat = [float(x) for x in pars_swift]
+print({'E': E_hat, 'sigma0 (MPa)': e0_hat, 'A': K_hat, 'n': n_hat})
+
+sigma0_hat, K_hat, n_hat = [float(x) for x in pars_voce]
+print({'E': E_hat, 'sigma0 (MPa)': sigma0_hat, 'Q': K_hat, 'B': n_hat})
 
 
 fig, ax = plt.subplots(figsize=(9,6))
@@ -192,9 +200,6 @@ ax.set_xticks(sparse_ticks(ep_fit))
 ax.set_yticks(sparse_ticks(sig_fit))
 plt.tight_layout()
 plt.show()
-
-
-print('Fit quality of ludwig is:',cov_lud[0, 0])
 
 
 # Extrapolating the fitted curves to a wider strain range
