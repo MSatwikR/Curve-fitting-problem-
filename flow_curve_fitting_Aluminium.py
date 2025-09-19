@@ -107,7 +107,7 @@ E_hat = 69500  # slope = Young's modulus
 #plastic strain
 ep_all = eps_true - sig_true / E_hat
 print('ep_all is',ep_all)
-mask_plastic = (ep_all > 0) & (np.arange(len(ep_all)) <= uts_idx)
+mask_plastic = (ep_all > 0.005) & (np.arange(len(ep_all)) <= uts_idx)
 #mask_plastic_stress = (np.arange(len(sig_true)) >= yield_idx) & (np.arange(len(sig_true)) <= uts_idx)
 ep_fit = ep_all[mask_plastic]
 sig_fit = sig_true[mask_plastic]

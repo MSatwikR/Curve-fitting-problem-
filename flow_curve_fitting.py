@@ -93,7 +93,7 @@ print(f"Yield approx: idx={yield_idx}, sigma_y={sigma_y:.1f} MPa")
 
 #εp ≈ εtrue − σtrue/E beyond yield
 ep_all = eps_true - sig_true / E_hat
-mask_plastic = (np.arange(len(ep_all)) >= yield_idx+150) & (np.arange(len(ep_all)) <= uts_idx+50)
+mask_plastic = (np.arange(len(ep_all)) >= yield_idx) & (np.arange(len(ep_all)) <= uts_idx)
 #mask_plastic_stress = (np.arange(len(sig_true)) >= yield_idx) & (np.arange(len(sig_true)) <= uts_idx)
 ep_fit = ep_all[mask_plastic]
 sig_fit = sig_true[mask_plastic]
@@ -206,7 +206,7 @@ plt.show()
 
 # Choosing the extrapolation range (plastic strain)
 ep_max_current = float(np.max(ep_fit))
-ep_max_target = max(3*ep_max_current, 0.30)   # extend to 300% of current, at least to 0.30 plastic strain
+ep_max_target = max(3*ep_max_current, 0.30)
 N_points = 500
 ep_ex = np.linspace(np.min(ep_fit), ep_max_target, N_points)
 
