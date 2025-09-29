@@ -119,6 +119,10 @@ def voce(ep, sigma0, Q, B):
     return sigma0 + (Q * (1-np.exp(-B*ep)))
 # Q = saturation stress increment, B = strain rate coefficient, n = hardening exponent, sigma0 = yield stress
 
+
+def HocketSherby(ep, sigma0, sigma_satu, M, n):
+    return sigma_satu - ((sigma_satu - sigma0) * np.exp(- (M * ep) ** n))
+
 #Fitting into Ludwig curve with initial guesses
 sigma0_g = sigma_y
 n_g = 0.1
@@ -150,21 +154,30 @@ ep0_g = float(sigma_y/E_hat)
 t_g = 0.1
 A_g = 600
 p0_swift = [ep0_g, A_g, t_g]
-bounds_swift = ([0.001, 100, 0.001], [0.05, 1500, 0.5])
+bounds_swift = ([0.001, 100, 0.001], [1, 1500, 3])
 
 
 #Fitting into the voce law
-sigma0v_g = float(np.clip(sigma_y, 200, 1500))
-B_g = float(np.clip(10, 1, 30))
-Q_g = float(np.clip(600, 100, 1500))
+sigma0v_g = sigma_y
+B_g = 10
+Q_g = 600
 p0_voce = [sigma0v_g, Q_g, B_g]
-bounds_voce = ([200, 100, 1], [1500, 1500, 30])  # lower and upper bounds
+bounds_voce = ([600, 300, 1], [1500, 1500, 30])  # lower and upper bounds
+
+
+#Fitting into the HocketSherby
+sigma0h_g = sigma_y
+sigma_satu_g = max(sig_fit)
+M_g= 0.05
+n_g = 2
+p0_Hocket = [sigma0h_g,sigma_satu_g, M_g, n_g]
+bounds_Hocket = ([400,0.7*(max(sig_fit)),0,0], [1200, 1.5*(max(sig_fit)), 30, 5])  # lower and upper bounds
 
 
 pars_lud, cov_lud = curve_fit(ludwig, ep_fit, sig_fit, p0=p0_lud, bounds = bounds_lud)
 pars_swift, cov_swift = curve_fit(swift, ep_fit, sig_fit, p0=p0_swift, bounds = bounds_swift)
 pars_voce, cov_voce = curve_fit(voce, ep_fit, sig_fit, p0=p0_voce, bounds=bounds_voce)
-
+pars_hocket, cov_hocket = curve_fit(HocketSherby, ep_fit, sig_fit, p0=p0_Hocket, bounds=bounds_Hocket)
 
 sigma0_hat, K_hat, n_hat = [float(x) for x in pars_lud]
 print({'E': E_hat, 'sigma0 (MPa)': sigma0_hat, 'K': K_hat, 'n': n_hat})
@@ -175,6 +188,8 @@ print({'E': E_hat, 'sigma0 (MPa)': e0_hat, 'A': K_hat, 'n': n_hat})
 sigma0_hat, K_hat, n_hat = [float(x) for x in pars_voce]
 print({'E': E_hat, 'sigma0 (MPa)': sigma0_hat, 'Q': K_hat, 'B': n_hat})
 
+sigma0_hat, sigma_satu_hat, M_hat, n_hat = [float(x) for x in pars_hocket]
+print({'E': E_hat, 'sigma0 (MPa)': sigma0_hat, 'sigma_satu': sigma_satu_hat, 'M': M_hat, 'n': n_hat})
 
 fig, ax = plt.subplots(figsize=(9,6))
 #
@@ -182,7 +197,8 @@ ax.plot(eps_eng, sig_eng, 'c.', ms=1, alpha=0.3, label='Engineering (for referen
 ax.plot(eps_true, sig_true, 'k.', ms=2, alpha=0.5, label='True stress–strain')
 ax.plot(ep_fit, ludwig(ep_fit, *pars_lud), 'r.',ms=2, alpha=0.5, label=f'Ludwig fit (σ0={sigma0_hat:.1f}, K={K_hat:.1f}, n={n_hat:.3f})')
 ax.plot(ep_fit, swift(ep_fit, *pars_swift),'g.',ms =2, alpha= 0.5, label=f'Swift fit (ep0 = {(sigma0_hat/E_hat):.1f}, A = {K_hat:.1f}, n= {n_hat:.4f})')
-ax.plot(ep_fit, voce(ep_fit, *pars_voce),'b.',ms =2, alpha= 0.5, label=f'Voce fit ')
+ax.plot(ep_fit, voce(ep_fit, *pars_voce),'b.',ms =2, alpha= 0.5, label=f'Voce fit')
+ax.plot(ep_fit, HocketSherby(ep_fit, *pars_hocket),'c.',ms =2, alpha=0.5, label=f'HocketSherby fit')
 ax.set_xlabel('Strain')
 ax.set_ylabel('Stress (MPa)')
 ax.legend()
@@ -206,9 +222,10 @@ plt.show()
 
 # Choosing the extrapolation range (plastic strain)
 ep_max_current = float(np.max(ep_fit))
-ep_max_target = max(3*ep_max_current, 0.30)
+ep_max_target = max(3*np.max(eps_eng), 0.30)
+#print('ep_eng max value is:', np.max(eps_eng))
 N_points = 500
-ep_ex = np.linspace(np.min(ep_fit), ep_max_target, N_points)
+ep_ex = np.linspace(0, ep_max_target, N_points)
 
 # Evaluating models on the extrapolated grid
 sig_lud_ex = ludwig(ep_ex, *pars_lud)
@@ -244,3 +261,6 @@ print('R2 score for swift fit is',r2_swift)
 
 r2_voce = r2_score(sig_true[mask_plastic], voce(ep_fit, *pars_voce))
 print('R2 score for voce fit is',r2_voce)
+
+r2_hocekt = r2_score(sig_true[mask_plastic], HocketSherby(ep_fit, *pars_hocket))
+print('R2 score for HocketSherby fit is',r2_hocekt)

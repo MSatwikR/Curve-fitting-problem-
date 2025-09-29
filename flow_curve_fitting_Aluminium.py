@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -6,7 +8,7 @@ from sklearn.metrics import r2_score
 # Importing all required libraries
 
 #df = pd.read_csv("Stahl_N_20MnB4.csv", sep=';', encoding='latin1')
-df = pd.read_csv("aluminium_data.csv", sep=';', encoding='latin1')
+df = pd.read_csv("C:\\Users\\Messrechner\\Desktop\\Satwik\\aluminium_data.csv", sep=';', encoding='latin1')
 
 # using pandas reading the CSV file with tensile test data
 
@@ -95,7 +97,7 @@ sig_true = sig_true[valid2]'''
 sigma_y = 338
 #sigma_offset = (sigma_y - 150)
 yield_idx = int(np.argmin(np.abs(sig_eng - sigma_y)))
-print(f"Yield approx: idx={yield_idx}, sigma_y={sigma_y:.1f} MPa")
+#print(f"Yield approx: idx={yield_idx}, sigma_y={sigma_y:.1f} MPa")
 #using E and eps_eng trying to find yield stress
 
 #mask_E = np.arange(len(eps_eng)) < yield_idx
@@ -107,7 +109,7 @@ E_hat = 69500  # slope = Young's modulus
 #plastic strain
 ep_all = eps_true - sig_true / E_hat
 print('ep_all is',ep_all)
-mask_plastic = (ep_all > 0.005) & (np.arange(len(ep_all)) <= uts_idx)
+mask_plastic = (ep_all > 0) & (np.arange(len(ep_all)) <= uts_idx)
 #mask_plastic_stress = (np.arange(len(sig_true)) >= yield_idx) & (np.arange(len(sig_true)) <= uts_idx)
 ep_fit = ep_all[mask_plastic]
 sig_fit = sig_true[mask_plastic]
@@ -181,8 +183,7 @@ print({'E': E_hat, 'sigma0 (MPa)': sigma0_hat, 'K': K_hat, 'n': n_hat})
 
 
 
-fig, ax = plt.subplots(figsize=(9,6))
-#
+'''fig, ax = plt.subplots(figsize=(9,6))
 ax.plot(eps_eng, sig_eng, 'c.', ms=1, alpha=0.3, label='Engineering (for reference)')
 ax.plot(eps_true, sig_true, 'k.', ms=2, alpha=0.5, label='True stress–strain')
 ax.plot(ep_fit, ludwig(ep_fit, *pars_lud), 'r.',ms=2, alpha=0.5, label=f'Ludwig fit (σ0={sigma0_hat:.1f}, K={K_hat:.1f}, n={n_hat:.3f})')
@@ -204,7 +205,7 @@ def sparse_ticks(a, n_middle=5):
 ax.set_xticks(sparse_ticks(ep_fit))
 ax.set_yticks(sparse_ticks(sig_fit))
 plt.tight_layout()
-plt.show()
+plt.show()'''
 
 
 r2_lud = r2_score(sig_true[mask_plastic], ludwig(ep_fit, *pars_lud))
@@ -220,9 +221,9 @@ print('R2 score for voce fit is',r2_voce)
 
 # Choosing the extrapolation range (plastic strain)
 ep_max_current = float(np.max(ep_fit))
-ep_max_target = max(3*ep_max_current, 0.30)   # extend to 300% of current, at least to 0.30 plastic strain
-N_points = 500
-ep_ex = np.linspace(np.min(ep_fit), ep_max_target, N_points)
+ep_max_target = max(3*np.max(eps_eng), 0.30)   # extend to 300% of current, at least to 0.30 plastic strain
+N_points = 5000
+ep_ex = np.linspace(0, ep_max_target, N_points)
 
 # Evaluating models on the extrapolated grid
 sig_lud_ex = ludwig(ep_ex, *pars_lud)
@@ -240,7 +241,7 @@ ex_df.to_csv('extrapolated_flow_curves_aluminium.csv', index=False)
 print(ex_df.head())
 
 
-fig, ax = plt.subplots(figsize=(8,5))
+'''fig, ax = plt.subplots(figsize=(8,5))
 ax.plot(eps_true, sig_true, 'k.', ms=2, alpha=0.5, label='True stress–strain')
 ax.plot(ep_ex, sig_lud_ex, 'r.', ms=2, alpha=0.5, label='Ludwik extrapolated')
 ax.plot(ep_ex, sig_swift_ex, 'g.', ms=2, alpha=0.5, label='Swift extrapolated')
@@ -248,4 +249,4 @@ ax.plot(ep_ex, sig_voce_ex, 'b.', ms=2, alpha=0.5, label='Voce extrapolated')
 ax.set_xlabel('True plastic strain')
 ax.set_ylabel('True stress')
 ax.legend(); ax.grid(True, alpha=0.3)
-plt.tight_layout(); plt.show()
+plt.tight_layout(); plt.show()'''
