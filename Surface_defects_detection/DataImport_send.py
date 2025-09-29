@@ -77,8 +77,8 @@ height_nachher=height_nachher/(2**16-1)*(scanEnd_n-scanStart_n)+scanStart_n
                                                  
 ##Data Extraction completed
 
-novalue_vorher=np.where(novalue_vorher<10,1,np.nan)
-novalue_nachher=np.where(novalue_nachher<10,1,np.nan)
+novalue_vorher=np.where(novalue_vorher<120,1,np.nan)
+novalue_nachher=np.where(novalue_nachher<120,1,np.nan)
 
 height_vorher=height_vorher*novalue_vorher
 height_nachher=height_nachher*novalue_nachher
@@ -95,10 +95,10 @@ print('Vorher data is',data_vorher,'\n')
 print('Nachher data is',data_nachher,'\n')
 print('raw data is',data_raw,'\n')
 
-plt.imshow(height_nachher,cmap='Blues')
+plt.imshow(height_nachher,cmap='plasma')
 plt.colorbar()
 plt.show()
-plt.imshow(height_vorher,cmap='Greens')
+plt.imshow(height_vorher,cmap='viridis')
 plt.colorbar()
 plt.show()
 
