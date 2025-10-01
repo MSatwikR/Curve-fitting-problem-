@@ -9,6 +9,8 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
+#import data_preprocessing
+from scipy.interpolate import RegularGridInterpolator
 
 import for_one_file
 
@@ -137,7 +139,7 @@ plt.title('Height Nachher', fontsize=14)
 plt.tight_layout()
 plt.show()
 
-# SECOND SEPARATE PLOT: Height Vorher with viridis colormap
+# SECONF PLOT: Height Vorher with viridis colormap
 plt.figure(figsize=(8, 6))
 im2 = plt.imshow(height_vorher, cmap='viridis',
                  extent=[0, scan_width_mm,0, scan_height_mm],
@@ -212,8 +214,13 @@ def center_crop_and_plot(data, crop_fraction, title):
 
 
 height_nachher_center = center_crop_and_plot(height_nachher,crop_fraction=0.1,title="Height Nachher")
+print('cropped_nachher_data is:',height_nachher_center)
 
 height_vorher_center = center_crop_and_plot(height_vorher,crop_fraction=0.1,title="Height Nachher")
+
+#nan_count = len([x for x,y in height_vorher_center if x is np.nan])
+
+#print(nan_count)
 
 
 
@@ -274,7 +281,7 @@ def detect_indentation_opencv(height_data, min_radius_mm, max_radius_mm,sensor_r
             f"Center: ({center_x}, {center_y}) pixels = ({center_x * pixel_size_mm:.3f}, {center_y * pixel_size_mm:.3f}) mm")
         print(f"Radius: {radius_px} pixels = {radius_mm:.3f} mm")
 
-        return center_x, center_y, radius_px, radius_mm, circles
+        return center_x* pixel_size_mm, center_y* pixel_size_mm, radius_px, radius_mm, circles
     else:
         print("No circles detected!")
         return None, None, None, None, None
@@ -290,8 +297,119 @@ center_x, center_y, radius_px, radius_mm, all_circles = detect_indentation_openc
 #x_center, y_center, radius_center = for_one_file.unexpected_input( scan_data,height_nachher)
 
 
+data = np.asarray(height_nachher_center)
+r = 0.1 #indenter radius
+tol= 0.0001
+vectors = np.zeros((3,360))
+print(vectors)
+# vectors from the center
+def angle_vectors(center_y, center_x, r, r_max=0.5, angles_deg = None):
+    angles_rad = np.deg2rad(angles_deg)
+    radii = r
+    H,W = height_nachher_center.shape
+    while radii <= r_max:
+        y = center_y + radii * np.cos(angles_rad)
+        x = center_x + radii * np.sin(angles_rad)
+        y_pxls = (y*1000)/sensor_res_y
+        x_pxls = (x*1000)/sensor_res_x
+        y_idx = np.clip(np.rint(y_pxls).astype(int), 0, H - 1)
+        x_idx = np.clip(np.rint(x_pxls).astype(int), 0, W - 1)
+        #print(y, x, y_idx, x_idx)
+        values = height_nachher_center[y_idx, x_idx]
+        if np.isnan(values).all():
+            radii += 0.0001
+            continue
+        else:
+            radii_vector = np.zeros((3,1))
+            radii_vector[0,:] = y
+            radii_vector[1,:] = x
+            radii_vector[2,:] = (radii)
+            return radii_vector
+
+    else:
+        print("No Initial vector radii detected")
+        exit()
 
 
+for i in range(0,360):
+    vectors[:,i] = np.transpose(angle_vectors(center_x, center_y, r, r_max= 0.6,angles_deg=i))
+
+print(vectors)
+
+
+
+# Fast global annulus mask and NaN fraction
+def ring_region(shape, center_y, center_x, r_inner, r_outer):
+    Y, X = np.ogrid[:shape[0], :shape[1]]
+    dist2 = (Y - center_y) ** 2 + (X - center_x) ** 2  # (y - y0)^2 + (x - x0)^2
+    return (dist2 >= r_inner ** 2) & (dist2 < r_outer ** 2)
+
+def ring_nan_fraction(data, center_y, center_x, r, tol):
+    mask = ring_region(data.shape, center_y, center_x, r, r + tol)
+    vals = data[mask]
+
+    if vals.size == 0:
+        return np.nan
+    elif np.isnan(vals):
+        tol = tol - 0.001
+        return tol
+
+def global_valid_radii(data, center_y, center_x, r_max, tol=0.01, dr=0.5, max_nan_frac=0.0):
+    radii = np.arange(0.0, r_max + 0.01, dr)
+    flags = []
+    for r in radii:
+        frac = ring_nan_fraction(data, center_y, center_x, r, tol)
+        flags.append(np.nan if np.isnan(frac) else (frac <= max_nan_frac))
+    return radii, np.array(flags, dtype=object)
+
+# Per-angle segment check using interpolation (sub-pixel sampling)
+def build_interpolator(data, fill_value=np.nan):
+    rows = np.arange(data.shape[0])
+    cols = np.arange(data.shape[1])
+    return RegularGridInterpolator((rows, cols), data, bounds_error=False, fill_value=fill_value)
+
+def segment_nan_free(interpolator, center_y, center_x, theta_rad, r, tol, dr=0.5):
+    radii = np.arange(r, r + tol, dr)
+    if radii.size == 0:
+        return True
+    y = center_y + radii * np.cos(theta_rad)
+    x = center_x + radii * np.sin(theta_rad)
+    coords = np.stack([y, x], axis=1)
+    vals = interpolator(coords)
+    return np.isfinite(vals).all()
+
+def per_angle_max_valid_radius(data, center_y, center_x, r_max, tol=0.0001, dr=0.5, angles_deg=None):
+    if angles_deg is None:
+        angles_deg = np.arange(0, 360, 1)
+    interp = build_interpolator(data, fill_value=np.nan)
+    max_radii = []
+    for th in np.deg2rad(angles_deg):
+        r_ok = 0.0
+        r = 0.0
+        # Increase in tol steps; require the whole [r, r+tol) segment to be finite
+        while r < r_max:
+            if segment_nan_free(interp, center_y, center_x, th, r, tol, dr):
+                r_ok = r
+                r += tol
+            else:
+                break
+        max_radii.append(r_ok)
+    return np.array(max_radii), np.array(angles_deg)
+
+frac = ring_nan_fraction(data, center_y, center_x, r, tol)
+status_global = "good" if (frac == 0.0) else "defective"
+
+# Optional per-angle strict check (sub-pixel sampling)
+interp = build_interpolator(data, fill_value=np.nan)
+angles_deg = np.arange(0, 360, 1)
+ok_angles = [
+    segment_nan_free(interp, center_y, center_x, np.deg2rad(th), r, tol, dr=0.6)
+    for th in angles_deg
+]
+status_per_angle = "good" if all(ok_angles) else "defective"
+
+print("Global ring:", status_global)
+print("Per-angle:", status_per_angle)
 
 def computeIndent(data_raw, radius_dist,center_x,center_y):
     angles = np.deg2rad(np.arange(1, 361))
@@ -357,34 +475,3 @@ def two_dim_profile(radial_vector):
 
     return output_profile_2d
 
-
-# Get the 2D profile of the indent
-output_profile_y = two_dim_profile(cut_vector)
-
-punkt_abstand_x = 2.833
-radial_distance_x = punkt_abstand_x * np.arange(0, radius_dist + 0.01, 0.5)
-
-# Get the
-rows_grid_shape, cols_grid_shape = np.shape(data_raw)
-R, C = np.meshgrid(np.arange(0, cols_grid_shape), np.arange(0, rows_grid_shape))
-
-# Looks at the region where the minimum could lie
-factor_circle_radius = 30  # Based on load
-circle_radius = factor_circle_radius / punkt_abstand_x
-mask = (R - center_y) ** 2 + (C - center_x) ** 2 < circle_radius ** 2
-
-# Get a vector with the possible minimum values
-minimum_vector = data_raw[mask]
-minimum_vector_sorted = np.sort(minimum_vector)
-
-# Taking the 5th percentile of the sorted vector to be the minimum
-minimum_value = np.nanpercentile(minimum_vector_sorted, 5)
-output_profile_y[0:9] = minimum_value
-
-output_profile = np.vstack((radial_distance_x, output_profile_y)).T
-
-np.save("output_profile_2d", output_profile)
-
-import matplotlib.pyplot as plt
-
-plt.plot(output_profile[:, 0], output_profile[:, 1])
