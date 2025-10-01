@@ -12,7 +12,7 @@ import cv2
 #import data_preprocessing
 from scipy.interpolate import RegularGridInterpolator
 
-import for_one_file
+#import for_one_file
 
 os.chdir('C:\\Users\\Messrechner\\Desktop\\Satwik\\Surface_defects_detection\\Inputfiles')
 cur_dir=os.getcwd()
@@ -300,13 +300,14 @@ center_x, center_y, radius_px, radius_mm, all_circles = detect_indentation_openc
 data = np.asarray(height_nachher_center)
 r = 0.1 #indenter radius
 tol= 0.0001
+H,W = height_nachher_center.shape
 vectors = np.zeros((3,360))
 print(vectors)
 # vectors from the center
 def angle_vectors(center_y, center_x, r, r_max=0.5, angles_deg = None):
     angles_rad = np.deg2rad(angles_deg)
     radii = r
-    H,W = height_nachher_center.shape
+
     while radii <= r_max:
         y = center_y + radii * np.cos(angles_rad)
         x = center_x + radii * np.sin(angles_rad)
@@ -336,7 +337,34 @@ for i in range(0,360):
 
 print(vectors)
 
+def goodness_check(center_y,center_x,r,rad_tol,):
+    rad_tol = 0.001
+    for i in range(0,360):
+        angles_deg = i
+        angles_rad = np.deg2rad(angles_deg)
+        while r <= r+rad_tol:
+            y = center_y + r * np.cos(angles_rad)
+            x = center_x + r * np.sin(angles_rad)
+            y_pxls = (y * 1000) / sensor_res_y
+            x_pxls = (x * 1000) / sensor_res_x
+            y_idx = np.clip(np.rint(y_pxls).astype(int), 0, H - 1)
+            x_idx = np.clip(np.rint(x_pxls).astype(int), 0, W - 1)
+            # print(y, x, y_idx, x_idx)
+            values = height_nachher_center[y_idx, x_idx]
+            if np.isnan(values).all():
+                print("Messunung ist Schlecht")
+                exit()
+            else:
+                r += 0.0001
+                continue
+    return True
 
+for i in range(0,360):
+    if goodness_check(center_y,center_x,vectors[3,i],0.001):
+        print("Messunung gemutlich")
+    else:
+        print("something went wrong")
+        exit()
 
 # Fast global annulus mask and NaN fraction
 def ring_region(shape, center_y, center_x, r_inner, r_outer):
