@@ -16,7 +16,7 @@ from scipy.interpolate import RegularGridInterpolator
 
 os.chdir('C:\\Users\\Messrechner\\Desktop\\Satwik\\Surface_defects_detection\\Inputfiles')
 cur_dir=os.getcwd()
-MP="MP002"
+MP="MP028"
 
 #Extracting information regarding the pixel of the height vorher and nachher file,scanStart and scanEnd 
 f05=os.path.join(cur_dir,MP+"_height_vorher.txt")
@@ -333,37 +333,37 @@ def angle_vectors(center_y, center_x, r, r_max=0.5, angles_deg = None):
 
 
 for i in range(0,360):
-    vectors[:,i] = np.transpose(angle_vectors(center_x, center_y, r, r_max= 0.6,angles_deg=i))
+    vectors[:,i] = angle_vectors(center_y, center_x, r, r_max= 0.6,angles_deg=i).ravel()
 
 print(vectors)
 
-def goodness_check(center_y,center_x,r,rad_tol,):
-    rad_tol = 0.001
-    for i in range(0,360):
-        angles_deg = i
-        angles_rad = np.deg2rad(angles_deg)
-        while r <= r+rad_tol:
-            y = center_y + r * np.cos(angles_rad)
-            x = center_x + r * np.sin(angles_rad)
-            y_pxls = (y * 1000) / sensor_res_y
-            x_pxls = (x * 1000) / sensor_res_x
-            y_idx = np.clip(np.rint(y_pxls).astype(int), 0, H - 1)
-            x_idx = np.clip(np.rint(x_pxls).astype(int), 0, W - 1)
-            # print(y, x, y_idx, x_idx)
-            values = height_nachher_center[y_idx, x_idx]
-            if np.isnan(values).all():
-                print("Messunung ist Schlecht")
-                exit()
-            else:
-                r += 0.0001
-                continue
+def goodness_check(center_y,center_x,r,rad_tol,angles_deg):
+    #rad_tol = 0.001
+    r_end = r + rad_tol
+    angles_rad = np.deg2rad(angles_deg)
+    while r <= r_end:
+        y = center_y + r * np.cos(angles_rad)
+        x = center_x + r * np.sin(angles_rad)
+        y_pxls = (y * 1000) / sensor_res_y
+        x_pxls = (x * 1000) / sensor_res_x
+        y_idx = np.clip(np.rint(y_pxls).astype(int), 0, H - 1)
+        x_idx = np.clip(np.rint(x_pxls).astype(int), 0, W - 1)
+        # print(y, x, y_idx, x_idx)
+        values = height_nachher_center[y_idx, x_idx]
+        if np.isnan(values).any():
+            print("Messunung ist Schlecht")
+            return False
+        r += 0.0001
     return True
-
+gut=0
 for i in range(0,360):
-    if goodness_check(center_y,center_x,vectors[3,i],0.001):
-        print("Messunung gemutlich")
+    if goodness_check(center_y,center_x,vectors[-1,i],0.001,angles_deg = i):
+        gut = gut+1
+        if gut == 360:
+            print("Messunung gemutlich")
+            center_crop_and_plot(height_nachher_center, crop_fraction = 1, title = 'Average Messurment')
     else:
-        print("something went wrong")
+        center_crop_and_plot(height_nachher_center, crop_fraction = 1, title = 'Messunung ist Schlecht')
         exit()
 
 # Fast global annulus mask and NaN fraction
@@ -424,20 +424,7 @@ def per_angle_max_valid_radius(data, center_y, center_x, r_max, tol=0.0001, dr=0
         max_radii.append(r_ok)
     return np.array(max_radii), np.array(angles_deg)
 
-frac = ring_nan_fraction(data, center_y, center_x, r, tol)
-status_global = "good" if (frac == 0.0) else "defective"
 
-# Optional per-angle strict check (sub-pixel sampling)
-interp = build_interpolator(data, fill_value=np.nan)
-angles_deg = np.arange(0, 360, 1)
-ok_angles = [
-    segment_nan_free(interp, center_y, center_x, np.deg2rad(th), r, tol, dr=0.6)
-    for th in angles_deg
-]
-status_per_angle = "good" if all(ok_angles) else "defective"
-
-print("Global ring:", status_global)
-print("Per-angle:", status_per_angle)
 
 def computeIndent(data_raw, radius_dist,center_x,center_y):
     angles = np.deg2rad(np.arange(1, 361))
