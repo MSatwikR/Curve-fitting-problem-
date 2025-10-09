@@ -384,6 +384,8 @@ else:
     center_crop_and_plot(height_nachher_center, crop_fraction=1, title='Messunung ist Schlecht',plot= 'Save')
 
 
+
+
 '''for i in range(0,360):
     if goodness_check(center_y,center_x,vectors[-1,i],0.001,angles_deg = i):
         gut = gut+1
