@@ -16,7 +16,10 @@ from scipy.interpolate import RegularGridInterpolator
 
 os.chdir('C:\\Users\\Messrechner\\Desktop\\Satwik\\Surface_defects_detection\\Inputfiles')
 cur_dir=os.getcwd()
-MP="MP028"
+
+MP="MP021"
+out_path = os.path.join(cur_dir, "outputs")
+os.makedirs(out_path, exist_ok=True)
 
 #Extracting information regarding the pixel of the height vorher and nachher file,scanStart and scanEnd 
 f05=os.path.join(cur_dir,MP+"_height_vorher.txt")
@@ -137,7 +140,7 @@ plt.xlabel('[mm]', fontsize=12)
 plt.ylabel('[mm]', fontsize=12)
 plt.title('Height Nachher', fontsize=14)
 plt.tight_layout()
-plt.show()
+#plt.show()
 
 # SECONF PLOT: Height Vorher with viridis colormap
 plt.figure(figsize=(8, 6))
@@ -156,7 +159,7 @@ plt.xlabel('[mm]', fontsize=12)
 plt.ylabel('[mm]', fontsize=12)
 plt.title('Height Vorher', fontsize=14)
 plt.tight_layout()
-plt.show()
+#plt.show()
 
 
 #for the croped image:
@@ -169,7 +172,7 @@ plt.colorbar()
 plt.show()'''
 
 
-def center_crop_and_plot(data, crop_fraction, title):
+def center_crop_and_plot(data, crop_fraction, title, plot):
     height, width = data.shape
 
     # Calculate crop indices
@@ -207,16 +210,18 @@ def center_crop_and_plot(data, crop_fraction, title):
     plt.xlabel('[mm]')
     plt.ylabel('[mm]')
     plt.title(f'{title} - Center {int(crop_fraction * 100)}%')
-    plt.tight_layout()
-    plt.show()
+    fname = f'{MP}_result.png'
+    if plot == 'Save':
+        plt.savefig(os.path.join(out_path, fname), dpi=200, bbox_inches="tight")
+    else: plt.close()
 
     return cropped_data
 
 
-height_nachher_center = center_crop_and_plot(height_nachher,crop_fraction=0.1,title="Height Nachher")
+height_nachher_center = center_crop_and_plot(height_nachher,crop_fraction=0.1,title="Height Nachher",plot="No")
 print('cropped_nachher_data is:',height_nachher_center)
 
-height_vorher_center = center_crop_and_plot(height_vorher,crop_fraction=0.1,title="Height Nachher")
+height_vorher_center = center_crop_and_plot(height_vorher,crop_fraction=0.1,title="Height Nachher",plot="No")
 
 #nan_count = len([x for x,y in height_vorher_center if x is np.nan])
 
@@ -355,16 +360,47 @@ def goodness_check(center_y,center_x,r,rad_tol,angles_deg):
             return False
         r += 0.0001
     return True
+
+
 gut=0
-for i in range(0,360):
+gut2=0
+for i in range(360):
+    ok1 = goodness_check(center_y, center_x, vectors[-1, i], 0.001, angles_deg=i)
+    if not ok1:
+        center_crop_and_plot(height_nachher_center, crop_fraction=1, title='Messunung ist Schlecht',plot= 'Save')
+        exit()
+    gut += 1
+    if goodness_check(center_y, center_x, vectors[-1, i], 0.05, angles_deg=i):
+        gut2 += 1
+        print(gut,gut2)
+
+if gut == 360 and gut2 >= 300:
+    print("Gut Messunung")
+    center_crop_and_plot(height_nachher_center, crop_fraction=1, title='Gut Messunung',plot= 'Save')
+elif gut == 360 and gut2 >= 180:
+    print("Average Messurment")
+    center_crop_and_plot(height_nachher_center, crop_fraction=1, title='Average Messurment',plot= 'Save')
+else:
+    center_crop_and_plot(height_nachher_center, crop_fraction=1, title='Messunung ist Schlecht',plot= 'Save')
+
+
+'''for i in range(0,360):
     if goodness_check(center_y,center_x,vectors[-1,i],0.001,angles_deg = i):
         gut = gut+1
         if gut == 360:
-            print("Messunung gemutlich")
-            center_crop_and_plot(height_nachher_center, crop_fraction = 1, title = 'Average Messurment')
+            if goodness_check(center_y,center_x,vectors[-1,i],0.002,angles_deg = i):
+                gut2 = gut2+1
+                print(gut, gut2)
+                if gut2 >= 10:
+                    print("Gut Messunung")
+                    center_crop_and_plot(height_nachher_center, crop_fraction=1, title='Gut Messunung')
+                else:
+                    print("Average Messurment")
+                    center_crop_and_plot(height_nachher_center, crop_fraction=1, title='Average Messurment')
+        else: continue
     else:
         center_crop_and_plot(height_nachher_center, crop_fraction = 1, title = 'Messunung ist Schlecht')
-        exit()
+        exit()'''
 
 # Fast global annulus mask and NaN fraction
 def ring_region(shape, center_y, center_x, r_inner, r_outer):
@@ -447,7 +483,7 @@ def computeIndent(data_raw, radius_dist,center_x,center_y):
     radius_vector[:, 1::2] = x_coords  # even columns (1-based)
     return radius_vector  # , y_coords.shape
 
-cut_vector= computeIndent(data_raw,90,center_x,center_y)
+#cut_vector= computeIndent(data_raw,90,center_x,center_y)
 
 
 def two_dim_profile(radial_vector):
